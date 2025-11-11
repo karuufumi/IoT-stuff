@@ -1,72 +1,110 @@
-import sys
+import network
 import time
-from Adafruit_IO import MQTTClient
+from umqtt.simple import MQTTClient
 
-# --- CONFIGURATION ---
-AIO_USERNAME = "ntk_cse"
-AIO_KEY = "rwJ51Y6x1c4VLCA"
+# ============================================================
+# GLOBAL SENSOR VARIABLES  (values updated by your sensor code)
+# ============================================================
+RT = 0      # temperature
+RH = 0      # humidity
+LUX = 0     # light intensity
 
-# The specific feeds you want to fetch
-# Note: Ensure these match your Adafruit IO Feed Keys exactly (hyphen vs underscore)
-FEED_IDS = ["dadn-humid", "dadn-temp", "dadn-light"]
+# ============================================================
+# USER CONFIGURATION
+# ============================================================
+WIFI_SSID = 'abcd'       
+WIFI_PASS = '123456789'  
 
-# --- CALLBACK FUNCTIONS ---
+# ============================================================
+# ADAFRUIT IO CONFIGURATION
+# ============================================================
+AIO_SERVER = 'io.adafruit.com'
+AIO_PORT   = 1883
+AIO_USER   = 'ntk_cse'                # your username
+AIO_KEY    = 'rwJ51Y6x1c4VLCA'        # your AIO key
 
-def connected(client):
-    print("Connected to Adafruit IO! Initializing subscriptions...")
-    # Loop through your list and subscribe to each one
-    for feed in FEED_IDS:
-        feed_path = f"{AIO_USERNAME}/feeds/{feed}"
-        client.subscribe(feed_path)
-        print(f" >> Subscribed to: {feed}")
+# Feed names on Adafruit IO
+FEED_RT  = 'ntk_cse/feeds/rt'
+FEED_RH  = 'ntk_cse/feeds/rh'
+FEED_LUX = 'ntk_cse/feeds/lux'
 
-def subscribe(client, userdata, mid, granted_qos):
+
+# ============================================================
+# CONNECT TO WIFI
+# ============================================================
+def connect_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        print("Connecting to WiFi...")
+        wlan.connect(WIFI_SSID, WIFI_PASS)
+
+        retry = 0
+        while not wlan.isconnected():
+            print("Waiting for WiFi...", retry)
+            retry += 1
+            time.sleep(1)
+
+    print("WiFi Connected:", wlan.ifconfig())
+    return True
+
+
+# ============================================================
+# CONNECT TO ADAFRUIT IO (MQTT)
+# ============================================================
+def connect_mqtt():
+    client_id = "ESP32_AQI_GATEWAY"
+    client = MQTTClient(client_id, AIO_SERVER, AIO_PORT, AIO_USER, AIO_KEY)
     
-    pass
-
-def disconnected(client):
-    print("Disconnected from Adafruit IO!")
-    sys.exit(1)
-
-def message(client, feed_id, payload):
-    """
-    This function triggers AUTOMATICALLY when data arrives.
-    """
-    # Clean up the feed_id to just get the name (removes "username/feeds/")
-    feed_name = feed_id.split('/')[-1]
+    try:
+        client.connect()
+        print("Connected to Adafruit IO MQTT.")
+    except Exception as e:
+        print("MQTT Connection failed:", e)
+        time.sleep(3)
+        machine.reset()
     
-    print(f"[DATA FETCHED] {feed_name}: {payload}")
-
-    # --- FUTURE INTELLIGENCE GOES HERE ---
-    # This is where you will add your logic later.
-    # Example:
-    # if feed_name == "dadn-temp":
-    #     save_to_history(payload)
-    #     perform_regression()
+    return client
 
 
-# --- MAIN SETUP ---
+# ============================================================
+# PUBLISH SENSOR DATA
+# ============================================================
+def publish_all(client):
+    global RT, RH, LUX
 
-# 1. Initialize the Client
-client = MQTTClient(AIO_USERNAME, AIO_KEY)
+    try:
+        client.publish(FEED_RT,  str(RT))
+        client.publish(FEED_RH,  str(RH))
+        client.publish(FEED_LUX, str(LUX))
 
-# 2. Link the callback functions
-client.on_connect = connected
-client.on_disconnect = disconnected
-client.on_message = message
-client.on_subscribe = subscribe
+        print("Published → RT:", RT, "| RH:", RH, "| LUX:", LUX)
 
-# 3. Connect to the Cloud
-client.connect()
+    except Exception as e:
+        print("Publish error:", e)
 
-# 4. Start the background listener
-# This creates a separate thread to handle incoming network messages
-client.loop_background()
 
-print("Gateway is running. Waiting for data from Yolo:Bit...")
+# ============================================================
+# MAIN LOOP
+# ============================================================
+def loop(client):
+    global RT, RH, LUX
 
-# --- MAIN LOOP ---
-while True:
-    # The script needs to stay alive to keep listening.
-    # We just sleep to save CPU power.
-    time.sleep(1)
+    while True:
+        # TODO: update RT, RH, LUX from your sensors here
+        # Example (fake values):
+        RT  += 1
+        RH  += 2
+        LUX += 3
+
+        publish_all(client)
+
+        time.sleep(5)   # publish interval (seconds)
+
+
+# ============================================================
+# RUN PROGRAM
+# ============================================================
+connect_wifi()
+client = connect_mqtt()
+loop(client)
