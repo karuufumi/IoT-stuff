@@ -1,110 +1,158 @@
-import network
 import time
-from umqtt.simple import MQTTClient
-
-# ============================================================
-# GLOBAL SENSOR VARIABLES  (values updated by your sensor code)
-# ============================================================
-RT = 0      # temperature
-RH = 0      # humidity
-LUX = 0     # light intensity
+import json
+import serial
+import serial.tools.list_ports
+import paho.mqtt.client as mqtt
 
 # ============================================================
 # USER CONFIGURATION
 # ============================================================
-WIFI_SSID = 'abcd'       
-WIFI_PASS = '123456789'  
+AIO_USERNAME = "ntk_cse"
+AIO_KEY      = "rwJ51Y6x1c4VLCA"   # Your actual key
+AIO_SERVER   = "io.adafruit.com"
+AIO_PORT     = 1883
+
+# Feed names (auto prepend username)
+FEED_RT  = f"{AIO_USERNAME}/feeds/rt"
+FEED_RH  = f"{AIO_USERNAME}/feeds/rh"
+FEED_LUX = f"{AIO_USERNAME}/feeds/lux"
 
 # ============================================================
-# ADAFRUIT IO CONFIGURATION
+# SERIAL CONFIG (PC receiving data from microcontroller)
 # ============================================================
-AIO_SERVER = 'io.adafruit.com'
-AIO_PORT   = 1883
-AIO_USER   = 'ntk_cse'                # your username
-AIO_KEY    = 'rwJ51Y6x1c4VLCA'        # your AIO key
-
-# Feed names on Adafruit IO
-FEED_RT  = 'ntk_cse/feeds/rt'
-FEED_RH  = 'ntk_cse/feeds/rh'
-FEED_LUX = 'ntk_cse/feeds/lux'
-
-
-# ============================================================
-# CONNECT TO WIFI
-# ============================================================
-def connect_wifi():
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    if not wlan.isconnected():
-        print("Connecting to WiFi...")
-        wlan.connect(WIFI_SSID, WIFI_PASS)
-
-        retry = 0
-        while not wlan.isconnected():
-            print("Waiting for WiFi...", retry)
-            retry += 1
-            time.sleep(1)
-
-    print("WiFi Connected:", wlan.ifconfig())
-    return True
+BAUDRATE = 115200
+SERIAL_TIMEOUT = 0.2
 
 
 # ============================================================
-# CONNECT TO ADAFRUIT IO (MQTT)
+# Find a serial port automatically
 # ============================================================
-def connect_mqtt():
-    client_id = "ESP32_AQI_GATEWAY"
-    client = MQTTClient(client_id, AIO_SERVER, AIO_PORT, AIO_USER, AIO_KEY)
-    
+def find_serial_port():
+    ports = serial.tools.list_ports.comports()
+    for p in ports:
+        print("Detected:", p.device, p.description)
+        if "USB" in p.description or "ACM" in p.description or "COM" in p.device:
+            return p.device
+    return None
+
+
+# ============================================================
+# MQTT CALLBACKS
+# ============================================================
+def on_connect(client, userdata, flags, rc):
+    print("Connected to Adafruit IO with result code", rc)
+
+
+def on_disconnect(client, userdata, rc):
+    print("Disconnected from Adafruit IO. Reconnecting...")
+    time.sleep(3)
     try:
-        client.connect()
-        print("Connected to Adafruit IO MQTT.")
-    except Exception as e:
-        print("MQTT Connection failed:", e)
-        time.sleep(3)
-        machine.reset()
-    
+        client.reconnect()
+    except:
+        pass
+
+
+# ============================================================
+# CREATE MQTT CLIENT
+# ============================================================
+def create_mqtt_client():
+    client = mqtt.Client()
+    client.username_pw_set(AIO_USERNAME, AIO_KEY)
+
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
+
+    print("Connecting to Adafruit IO...")
+    client.connect(AIO_SERVER, AIO_PORT, keepalive=60)
+
+    client.loop_start()
     return client
 
 
 # ============================================================
-# PUBLISH SENSOR DATA
+# SEND RT/RH/LUX TO ADAFRUIT IO
 # ============================================================
-def publish_all(client):
-    global RT, RH, LUX
-
+def publish_data(client, RT, RH, LUX):
     try:
-        client.publish(FEED_RT,  str(RT))
-        client.publish(FEED_RH,  str(RH))
-        client.publish(FEED_LUX, str(LUX))
-
-        print("Published → RT:", RT, "| RH:", RH, "| LUX:", LUX)
-
+        client.publish(FEED_RT,  RT)
+        client.publish(FEED_RH,  RH)
+        client.publish(FEED_LUX, LUX)
+        print(f"PUBLISHED → RT={RT}, RH={RH}, LUX={LUX}")
     except Exception as e:
         print("Publish error:", e)
 
 
 # ============================================================
+# PARSE SERIAL PACKETS FROM MICROCONTROLLER
+#
+# Expected data format from sensor device:
+#   !RT:25:RH:60:LUX:300#
+#
+# Example:
+#   !RT:24:RH:58:LUX:700#
+# ============================================================
+def parse_packet(packet):
+    try:
+        data = packet.replace("!", "").replace("#", "")
+        parts = data.split(":")
+        # RT:<value>, RH:<value>, LUX:<value>
+        RT  = float(parts[1])
+        RH  = float(parts[3])
+        LUX = float(parts[5])
+        return RT, RH, LUX
+    except:
+        return None
+
+
+# ============================================================
 # MAIN LOOP
 # ============================================================
-def loop(client):
-    global RT, RH, LUX
+def main():
+    # --- Setup MQTT ---
+    client = create_mqtt_client()
 
+    # --- Find Serial Port ---
+    port = find_serial_port()
+    if port is None:
+        print("ERROR: No microcontroller detected!")
+        return
+
+    print("Using Serial Port:", port)
+    ser = serial.Serial(port, BAUDRATE, timeout=SERIAL_TIMEOUT)
+
+    buffer = ""
+
+    # --- MAIN LOOP ---
     while True:
-        # TODO: update RT, RH, LUX from your sensors here
-        # Example (fake values):
-        RT  += 1
-        RH  += 2
-        LUX += 3
+        if ser.in_waiting:
+            buffer += ser.read(ser.in_waiting).decode(errors="ignore")
 
-        publish_all(client)
+        # Process packets of form ! ... #
+        while "!" in buffer and "#" in buffer:
+            start = buffer.find("!")
+            end   = buffer.find("#", start)
 
-        time.sleep(5)   # publish interval (seconds)
+            if end == -1:
+                break
+
+            packet = buffer[start:end+1]
+            buffer = buffer[end+1:]
+
+            print("Received packet:", packet)
+            parsed = parse_packet(packet)
+
+            if parsed:
+                RT, RH, LUX = parsed
+                publish_data(client, RT, RH, LUX)
+            else:
+                print("Malformed packet:", packet)
+
+        time.sleep(0.2)
 
 
 # ============================================================
 # RUN PROGRAM
 # ============================================================
-connect_wifi()
-client = connect_mqtt()
-loop(client)
+if __name__ == "__main__":
+    print("Starting PC Gateway...")
+    main()
