@@ -25,7 +25,7 @@ SERIAL_TIMEOUT = 0.2
 
 
 # ============================================================
-# Find a serial port automatically
+# Find a serial port helper
 # ============================================================
 def find_serial_port():
     ports = serial.tools.list_ports.comports()
@@ -34,6 +34,8 @@ def find_serial_port():
         if "USB" in p.description or "ACM" in p.description or "COM" in p.device:
             return p.device
     return None
+
+
 
 
 # ============================================================
