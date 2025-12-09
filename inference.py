@@ -16,17 +16,6 @@ FEED_LUX = "lux"
 BASE_URL = f"https://io.adafruit.com/api/v2/{AIO_USERNAME}/feeds"
 
 
-def find_serial_port():
-    ports = serial.tools.list_ports.comports()
-
-    for p in ports:
-        if "Bluetooth" in p.device or "debug" in p.device:
-            continue
-        
-        print("Trying port:", p.device)
-        return p.device
-
-    return None
 
 # ============================================================
 # HELPERS — fetch data from Adafruit IO
