@@ -18,3 +18,11 @@ Backend service for an IoT monitoring system built with FastAPI, MongoDB, JWT au
 - JWT (PyJWT)
 - WebSockets
 - Passlib (bcrypt)
+
+## Setup
+
+### Create virtual environment
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
