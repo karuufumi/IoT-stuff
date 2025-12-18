@@ -9,6 +9,9 @@ from data.mongo import mongo
 from controller.AuthController import router as auth_router
 from controller.SystemController import router as system_router
 from gateway.adafruit_gateway import start_adafruit_gateway
+from controller.RealTimeController import router as rt_router
+from controller.IngestController import router as ingest_router
+from controller.HistoryController import router as history_router
 
 load_dotenv()
 
@@ -101,3 +104,7 @@ def root():
 
 app.include_router(auth_router)
 app.include_router(system_router)
+
+app.include_router(rt_router)
+app.include_router(ingest_router)
+app.include_router(history_router)
