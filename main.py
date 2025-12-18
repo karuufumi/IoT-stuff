@@ -7,7 +7,7 @@ import asyncio
 
 from data.mongo import mongo
 from controller.AuthController import router as auth_router
-from controller.controllers import router as system_router
+from controller.SystemController import router as system_router
 from gateway.adafruit_gateway import start_adafruit_gateway
 
 load_dotenv()
