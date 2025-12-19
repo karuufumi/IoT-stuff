@@ -85,6 +85,13 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+from fastapi import Request
+from fastapi.responses import Response
+
+@app.options("/{path:path}")
+async def preflight_handler(request: Request, path: str):
+    return Response(status_code=200)
+
 
 # ======================
 # Root UI
