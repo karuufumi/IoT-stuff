@@ -114,9 +114,20 @@ def root():
 # Routers
 # ======================
 
+'''
 app.include_router(auth_router)
 app.include_router(system_router)
 
 app.include_router(rt_router)
 app.include_router(ingest_router)
 app.include_router(history_router)
+'''
+# ======================
+# Routers
+# ======================
+
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(system_router, prefix="/system", tags=["System"])
+app.include_router(rt_router)
+app.include_router(ingest_router, prefix="/ingest", tags=["Ingest"])
+app.include_router(history_router, prefix="/history", tags=["History"])
