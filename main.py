@@ -73,15 +73,16 @@ app = FastAPI(
     version="1.1.0",
     lifespan=lifespan,
 )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # local dev
+        "http://localhost:3000",
         "https://air-quality-hsrh10wa3-fuminatos-projects.vercel.app",
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,  # 🔴 IMPORTANT
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
