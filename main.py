@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from pymongo import AsyncMongoClient
 from fastapi.responses import HTMLResponse
 import asyncio
+from fastapi.middleware.cors import CORSMiddleware
+
 
 from data.mongo import mongo
 from controller.AuthController import router as auth_router
@@ -68,8 +70,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="IoT Backend",
-    version="0.1.0",
+    version="1.1.0",
     lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # local dev
+        "https://air-quality-hsrh10wa3-fuminatos-projects.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
